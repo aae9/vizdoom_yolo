@@ -1,2 +1,7 @@
 Map identisch für Deathmatch? --> Manueller Pfad könnte eingerichtet werden oder über RL 
+Es könnten States eingeführt werden die z.B. die Bearbeitung von Bildern erhöht oder Bewegungsmuster verändert basierend auf den Status des Spiels:
+Yolo sieht Gegner Ziel auf Mitte und Bewege zurück und Schieße
+Yolo sieht Item Ziel auf Mitte und Bewege dich hin
+Yolo sieht nichts: Drehe dich + zufällige Bewegung
+Priorität: Gegner --> Items könnte aber Abhängig sein von z.B. Rüstung oder Leben
 Umsehen von Character ähnlich wie CSGO bots --> Yolo leistungsfähig dafür? 

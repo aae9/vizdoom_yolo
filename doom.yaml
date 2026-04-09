@@ -12,7 +12,7 @@ test: sprites/test # test images (optional)
 
 # Classes
 names:
-  0: zombie_sergeant baron_of_hell
+  0: zombie_sergeant 
   1: cacodemon
   2: cyber_demon
   3: demon

@@ -1,0 +1,4 @@
+Zum Trainieren die YoloTraining Python ausführen --> Model in model.() austauschen was du brauchst
+
+YoloTesting testet auf Please.jpg kann aber ausgetauscht werden und benutzt best.pt musst du nach dem Training austauschen mit deinen weights
+

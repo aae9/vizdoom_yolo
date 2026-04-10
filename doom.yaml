@@ -12,22 +12,63 @@ test: sprites/test # test images (optional)
 
 # Classes
 names:
-  0: zombie_sergeant 
-  1: cacodemon
-  2: cyber_demon
-  3: demon
-  4: imp
-  5: lost_soul
-  6: marine
-  7: powerups
-  8: spiderdemon
-  9: weapon_1
-  10: weapon_2
-  11: weapon_3
-  12: weapon_4
-  13: weapon_5
-  14: baron_of_hell
-  15: zombie
+  0: toxic barrel
+  1: burning barrel
+  2: red skull lantern
+  3: green skull lantern
+  4: blue skull lantern
+  5: red torch
+  6: blue torch
+  7: green torch
+  8: candle
+  9: lantern
+  10: big lantern
+  11: mid lantern
+  12: eye
+  13: skulls
+  14: more skulls
+  15: dead body
+  16: flying stone
+  17: altar
+  18: tree
+  19: stone
+  20: black lightsaber
+  21: dracula
+  22: dream physique
+  23: backpack
+  24: berserk
+  25: computer area map
+  26: invulnerabillity
+  27: light amplification visor
+  28: megasphere
+  29: partial invisibillity
+  30: radiation shield suit
+  31: clip
+  32: 4 shotgun shells
+  33: rocket
+  34: energy cell
+  35: box of bullets
+  36: box of shotgun shells
+  37: energy cell pack
+  38: blue keycard
+  39: red keycard
+  40: yellow keycard
+  41: blue skull key
+  42: red skull key
+  43: yellow skull key
+  44: chainsaw
+  45: shotgun
+  46: rocket launcher
+  47: plasma gun
+  48: bfg9000
+  49: super shotgun
+  50: health bonus
+  51: soul sphere
+  52: medkit
+  53: stimpack
+  54: armor bonus
+  55: armor
+  56: megaarmor
 
 
 

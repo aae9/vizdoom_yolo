@@ -16,12 +16,12 @@ def generate_data(class_number = 0, num_samples = None):
     print(os.listdir(folder_path_backgrounds))
     for _ in range(num_samples):
         background = cv2.imread(folder_path_backgrounds +"/"+ random.choice(os.listdir(folder_path_backgrounds)), cv2.IMREAD_UNCHANGED)
-        #background = cv2.cvtColor(background, cv2.COLOR_BGRA2RGBA)
+        # background = cv2.cvtColor(background, cv2.COLOR_BGRA2RGBA)
         random_sprite = random.choice(os.listdir(sprites_folder))
         print(random_sprite)
         txt_file = random_sprite.split(".")[0] + ".txt"
         sprite = cv2.imread(sprites_folder + "/"+ random_sprite, cv2.IMREAD_UNCHANGED)
-        #sprite = cv2.cvtColor(sprite, cv2.COLOR_BGRA2RGBA)
+        # sprite = cv2.cvtColor(sprite, cv2.COLOR_BGRA2RGBA)
         max_scale = min(background.shape[1] / sprite.shape[1], background.shape[0] / sprite.shape[0]) // 2
         min_scale = 1
         if max_scale < 1:
@@ -29,7 +29,7 @@ def generate_data(class_number = 0, num_samples = None):
             return
         random_size = random.randint(int(min_scale), int(max_scale))
         sprite = cv2.resize(sprite, (sprite.shape[1]*random_size, sprite.shape[0]*random_size), interpolation=cv2.INTER_AREA)
-        #Reshape Image randomly and make sure the image doesnt get squished if the image is not in a square format
+        # Reshape Image randomly and make sure the image doesnt get squished if the image is not in a square format
         
         print(background.shape, "//////", sprite.shape)
         # Randomly place the sprite on the background
@@ -55,9 +55,9 @@ def generate_data(class_number = 0, num_samples = None):
 
         cv2.imwrite(destination_folder_images + "/image_" + str(class_number) + "_" + str(_) + ".png", background)
 
-        #show_image_with_bbox(background, (class_number,x_center,y_center,w,h), "Demon")
+        # show_image_with_bbox(background, (class_number,x_center,y_center,w,h), "Demon")
 
-    return #np.vstack(data)
+    return # np.vstack(data)
 
 def show_image_with_bbox(image, label, class_names=None):
     """

@@ -11,11 +11,11 @@ labels_folder = "../DoomDataset/model_data/labels"
 destination_folder_images = "../DoomDataset/model_data/images"
 destination_folder_labels = "../DoomDataset/model_data/labels"
 
-def generate_data(class_number = 0, enemy_name = "demon", num_samples = None):
+def generate_data(class_number = 0, num_samples = None):
 
     for _ in range(num_samples):
         background = cv2.imread(folder_path_backgrounds +"/"+ random.choice(os.listdir(folder_path_backgrounds)), cv2.IMREAD_UNCHANGED)
-        random_sprite = random.choice(os.listdir(sprites_folder + "/" + enemy_name))
+        random_sprite = random.choice(os.listdir(sprites_folder))
         sprite = cv2.imread(sprites_folder + "/"+ random_sprite, cv2.IMREAD_UNCHANGED)
         max_scale = min(background.shape[1] / sprite.shape[1], background.shape[0] / sprite.shape[0]) // 2
         min_scale = 1

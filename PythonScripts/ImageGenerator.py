@@ -5,11 +5,12 @@ import random
 import cv2
 
 np.set_printoptions(threshold=np.inf)
-folder_path_backgrounds = "../DoomDataset/backgrounds"
-sprites_folder = "../DoomDataset/sprites"
-labels_folder = "../DoomDataset/model_data/labels"
-destination_folder_images = "../DoomDataset/model_data/images"
-destination_folder_labels = "../DoomDataset/model_data/labels"
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+folder_path_backgrounds = os.path.join(_script_dir, "../DoomDataset/backgrounds")
+sprites_folder = os.path.join(_script_dir, "../DoomDataset/sprites/spiderdemon_sprites") # /gegner und objekt hinzufügen
+labels_folder = os.path.join(_script_dir, "../DoomDataset/model_data/labels")
+destination_folder_images = os.path.join(_script_dir, "../DoomDataset/model_data/images/train")
+destination_folder_labels = os.path.join(_script_dir, "../DoomDataset/model_data/labels/train")
 
 def generate_data(class_number = 0, num_samples = None):
 
@@ -87,4 +88,4 @@ def show_image_with_bbox(image, label, class_names=None):
     plt.show()
 
 
-generate_data(0,100)
+generate_data(class_number=11, num_samples=100)

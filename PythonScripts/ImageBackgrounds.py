@@ -4,9 +4,9 @@ import os
 import random
 
 game = vzd.DoomGame()
-game.set_doom_game_path("freedoom2.wad")
+game.set_doom_game_path("DOOM2.WAD")
 game.add_game_args("-nomonsters")
-game.set_screen_resolution(vzd.ScreenResolution.RES_320X240)
+game.set_screen_resolution(vzd.ScreenResolution.RES_1920X1080)
 game.set_screen_format(vzd.ScreenFormat.RGB24)
 game.set_window_visible(False)
 game.set_render_hud(True)
@@ -43,7 +43,7 @@ for map_num in range(1, 33):  # map01 .. map32
 
         state = game.get_state()
         if state is not None:
-            imageio.imwrite(f"{out_dir}/Background{i + 6}.png", state.screen_buffer)
+            imageio.imwrite(f"{out_dir}/Background{i}.png", state.screen_buffer)
             i += 1
 
     game.close() 

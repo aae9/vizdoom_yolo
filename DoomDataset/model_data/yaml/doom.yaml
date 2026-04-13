@@ -12,7 +12,20 @@ test: model_data/images/val # test images (optional)
 
 # Classes
 names:
-  0: zombie_sergeant 
+  0: medkit
+  1: weapons
+  2: armor
+  3: powerups
+  4: objects
+  5: baron of hell
+  6: cacodemon
+  7: cyber demon
+  8: demon
+  9: lost soul
+  10: marine
+  11: spiderdemon
+  12: zombie sergeant
+  13: zombie
 
 
 

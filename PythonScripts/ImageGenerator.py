@@ -7,11 +7,11 @@ import cv2
 np.set_printoptions(threshold=np.inf)
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 folder_path_backgrounds = os.path.join(_script_dir, "../DoomDataset/backgrounds")
-sprites_folder = os.path.join(_script_dir, "../DoomDataset/sprites/spiderdemon_sprites") # /object or enemy path
+sprites_folder = os.path.join(_script_dir, "../DoomDataset/sprites/zombie_sergeant_sprites") # /object or enemy path
 # labels_folder = os.path.join(_script_dir, "../DoomDataset/labels") later
-destination_folder_images = os.path.join(_script_dir, "../DoomDataset/model_data/images/val") # first /train, /val and last /test
+destination_folder_images = os.path.join(_script_dir, "../DoomDataset/model_data/images/train") # first /train, /val and last /test
 os.makedirs(destination_folder_images, exist_ok=True)
-destination_folder_labels = os.path.join(_script_dir, "../DoomDataset/model_data/labels/val") # first /train, /val and last /test
+destination_folder_labels = os.path.join(_script_dir, "../DoomDataset/model_data/labels/train") # first /train, /val and last /test
 os.makedirs(destination_folder_labels, exist_ok=True)
 
 def generate_data(class_number = 0, num_samples = None):
@@ -91,7 +91,7 @@ def show_image_with_bbox(image, label, class_names=None):
     plt.show()
 
 
-generate_data(class_number=13, num_samples=20) # train = 100 samples, test = 20 samples, val = 20 samples
+generate_data(class_number=13, num_samples=100) # train = 100 samples, test = 20 samples, val = 20 samples
 
 # Classes
 '''
@@ -108,6 +108,6 @@ names:
   9: lost soul          (train: [x], test: [x], val: [x])
   10: marine            (train: [x], test: [x], val: [x])
   11: spiderdemon       (train: [x], test: [x], val: [x])
-  12: zombie sergeant   (train: [x], test: [x], val: [x])
-  13: zombie            (train: [x], test: [x], val: [x])
+  12: zombie            (train: [x], test: [x], val: [x])
+  13: zombie sergeant   (train: [], test: [x], val: [x])
   '''

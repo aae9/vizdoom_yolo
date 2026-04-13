@@ -9,9 +9,9 @@ _script_dir = os.path.dirname(os.path.abspath(__file__))
 folder_path_backgrounds = os.path.join(_script_dir, "../DoomDataset/backgrounds")
 sprites_folder = os.path.join(_script_dir, "../DoomDataset/sprites/spiderdemon_sprites") # /object or enemy path
 # labels_folder = os.path.join(_script_dir, "../DoomDataset/labels") later
-destination_folder_images = os.path.join(_script_dir, "../DoomDataset/model_data/images/test") # first /train, /val and last /test
+destination_folder_images = os.path.join(_script_dir, "../DoomDataset/model_data/images/val") # first /train, /val and last /test
 os.makedirs(destination_folder_images, exist_ok=True)
-destination_folder_labels = os.path.join(_script_dir, "../DoomDataset/model_data/labels/test") # first /train, /val and last /test
+destination_folder_labels = os.path.join(_script_dir, "../DoomDataset/model_data/labels/val") # first /train, /val and last /test
 os.makedirs(destination_folder_labels, exist_ok=True)
 
 def generate_data(class_number = 0, num_samples = None):
@@ -53,7 +53,7 @@ def generate_data(class_number = 0, num_samples = None):
         cv2.imwrite(destination_folder_images + "/image_" + str(class_number) + "_" + str(_) + ".png", background)
 
         # For debugging: visualize the image with bounding box
-        #show_image_with_bbox(background, (class_number,x_center,y_center,w,h), "Demon")
+        # show_image_with_bbox(background, (class_number,x_center,y_center,w,h), "Demon")
 
     return 
 
@@ -91,4 +91,23 @@ def show_image_with_bbox(image, label, class_names=None):
     plt.show()
 
 
-generate_data(class_number=11, num_samples=100)
+generate_data(class_number=13, num_samples=20) # train = 100 samples, test = 20 samples, val = 20 samples
+
+# Classes
+'''
+names:
+  0: medkit             (train: [x], test: [x], val: [x])
+  1: weapons            (train: [x], test: [x], val: [x])
+  2: armor              (train: [x], test: [x], val: [x])
+  3: powerups           (train: [x], test: [x], val: [x])
+  4: objects            (train: [x], test: [x], val: [x])
+  5: baron of hell      (train: [x], test: [x], val: [x])
+  6: cacodemon          (train: [x], test: [x], val: [x])
+  7: cyber demon        (train: [x], test: [x], val: [x])
+  8: demon              (train: [x], test: [x], val: [x])
+  9: lost soul          (train: [x], test: [x], val: [x])
+  10: marine            (train: [x], test: [x], val: [x])
+  11: spiderdemon       (train: [x], test: [x], val: [x])
+  12: zombie sergeant   (train: [x], test: [x], val: [x])
+  13: zombie            (train: [x], test: [x], val: [x])
+  '''

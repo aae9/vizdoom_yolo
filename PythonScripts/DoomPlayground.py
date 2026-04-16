@@ -32,7 +32,7 @@ _logger = logging.getLogger("doombot")
 game = vzd.DoomGame()
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 
-model_path = os.path.join(_script_dir, "../DoomDataset/model_weights/trainedyolo.pt")
+model_path = os.path.join(_script_dir, "../DoomDataset/model_weights/newtrainedyolo.pt")
 model = YOLO(model_path)
 
 # if more than enemies(5-13) are in one frame update weights with addition `+´, higher weight higher prio 

@@ -1,11 +1,11 @@
 task: detect
 mode: train
-model: c:\Users\Joshu\OneDrive\Desktop\DoomAssets\Neuer Ordner\vizdoom_yolo\PythonScripts\../DoomDataset/model_weights/yolo11n.pt
+model: yolo11n.pt
 data: c:\Users\Joshu\OneDrive\Desktop\DoomAssets\Neuer Ordner\vizdoom_yolo\PythonScripts\../DoomDataset/model_data/yaml/doom.yaml
 epochs: 50
 time: null
 patience: 100
-batch: 16
+batch: 18
 imgsz: 320
 save: true
 save_period: -1

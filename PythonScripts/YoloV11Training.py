@@ -11,8 +11,8 @@ yaml = os.path.join(_script_dir, "../DoomDataset/model_data/yaml/doom.yaml")
 model.train(
     data=yaml,
     epochs=50,
-    imgsz=640,
-    batch=16,
+    imgsz=320,
+    batch=18,
     name="yolo11n-doom",
     device="cpu",
     save_dir= os.path.join(_script_dir, "../DoomDataset/model_weights")

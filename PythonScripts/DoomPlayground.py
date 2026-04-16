@@ -53,6 +53,23 @@ class_weights = {
   13: 1.4
 }
 
+class_names = {
+    0: "medkit",
+    1: "weapons",
+    2: "armor",
+    3: "powerups",
+    4: "objects",
+    5: "baron of hell",
+    6: "cacodemon",
+    7: "cyber demon",
+    8: "demon",
+    9: "lost soul",
+    10: "marine",
+    11: "spiderdemon",
+    12: "zombie",
+    13: "zombie sergeant" 
+}
+
 ENEMY_CLASSES = set(range(5, 14)) # All labes are enemies with label 5 - 13
 # width = game.get_screen_width()
 
@@ -129,6 +146,8 @@ def movement_check(best = None, gain = 0.03, max_turn = 8.0):
     else:
         _logger.info(f"[info]Tracking[/info] dist={distance:+d} turn={turn:+.1f}")
 
+
+# Logging
 def return_loggs(results, best=None):
     detections = [
         (int(box.cls[0]), float(box.conf[0]), list(map(int, box.xyxy[0])))
@@ -141,6 +160,7 @@ def return_loggs(results, best=None):
         return
 
     best_cls = best["cls_id"] if best else None
+    best_label = f"{best_cls}: {class_names.get(best_cls, 'unbekannt')}" if best_cls is not None else "—"
     dist_lookup = {obj["boundarybox"]: obj["distance"] for obj in dist_to_all(results)}
 
     table = Table(
@@ -165,7 +185,7 @@ def return_loggs(results, best=None):
             f"{conf_bar} {conf:.0%}",
             f"({x1}, {y1}) → ({x2}, {y2})",
             f"{dist}",
-            f"{best_cls}"
+            f"{best_label}" if cls_id == best_cls else "—"
         )
 
     console.print(Panel(table, border_style="red", padding=(0, 1)))

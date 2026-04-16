@@ -2,7 +2,6 @@ import vizdoom as vzd
 from ultralytics import YOLO
 import os
 import time
-import cv2
 import logging
 from datetime import datetime
 
@@ -35,7 +34,7 @@ _script_dir = os.path.dirname(os.path.abspath(__file__))
 model_path = os.path.join(_script_dir, "../DoomDataset/model_weights/trainedyolo.pt")
 model = YOLO(model_path)
 
-# if more than enemies(5-13) are in one frame update weights with addition `+´, higher weight higher prio 
+# if more than enemies(5-13) are in one frame update weights with addition `+´, higher weight higher prio
 class_weights = {
   0: 1.0,
   1: 0.9,
@@ -53,13 +52,15 @@ class_weights = {
   13: 1.4
 }
 
-ENEMY_CLASSES = set(range(5, 14)) # All labes are enemies with label 5 - 13
-# width = game.get_screen_width()
+# Enemy class IDs (labels 5–13)
+ENEMY_CLASSES = set(range(5, 14))
+
+# Scaling factor: how many degrees to turn per pixel of horizontal offset
+TURN_SENSITIVITY = 0.15
 
 def process_frame(frame):
-     # Convert to RGB (ViZDoom gives BGR)
+    # Convert to RGB (ViZDoom gives BGR)
     frame = frame[:, :, ::-1]
-    # Run YOLOv11
     results = model(frame)
     return results
 
@@ -82,9 +83,13 @@ def dist_to_all(results):
 
     return distances
 
+
+
 def find_nearest_enemy(results):
     """
-    Searching in all object the object, which is the nearest, with condition the label is in ENEMY_CLASS(5-13)
+    Sucht unter allen erkannten Objekten den nächsten Feind (Label 5–13).
+    'Nächster' = größte Bounding-Box-Fläche (größer = physisch näher am Spieler).
+    Gibt ein Dict mit bbox, x_center und cls_id zurück, oder None wenn kein Feind.
     """
     best = None
     best_area = 0
@@ -92,7 +97,6 @@ def find_nearest_enemy(results):
     for result in results:
         for box in result.boxes:
             cls_id = int(box.cls[0])
-            # print(cls_id)
             if cls_id not in ENEMY_CLASSES:
                 continue
             x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -100,34 +104,47 @@ def find_nearest_enemy(results):
             if area > best_area:
                 best_area = area
                 best = {
-                    "cls_id": cls_id,                   # class
-                    "conf": float(box.conf[0]),         # confidence 0-100
-                    "boundarybox": (x1, y1, x2, y2),    # hitbox, from yolo
-                    "x_center":  (x1 + x2) // 2,        # center for aiming
-                    "distance": -((game.get_screen_width() // 2) - ((x1 + x2) // 2))
+                    "cls_id": cls_id,
+                    "conf": float(box.conf[0]),
+                    "boundarybox": (x1, y1, x2, y2),
+                    "x_center": (x1 + x2) // 2
                 }
+
     return best
 
-def movement_check(best = None, gain = 0.03, max_turn = 8.0):
-    if not best:
-        game.make_action([0, 0])
-        return
-    
-    distance = best["distance"]
-    bbox_w = best["boundarybox"][2] - best["boundarybox"][0] # x2 - x1
 
-    aim_tolerance = max(bbox_w // 2, 5) # dynamic range boundarybox of enemy // 2 and the last number is a tolerance, that the center doesn't have to be the middle value of boundarybox
-    turn = distance * gain
-    turn = max(-max_turn, min(max_turn, turn))
+def aim_and_shoot(results):
+    """
+    Zielt auf den nächsten Feind und schießt, wenn das Fadenkreuz im Boundarybox liegt.
+    Gibt True zurück, wenn ein Feind gefunden wurde.
+    """
+    screen_center = game.get_screen_width() // 2
 
-    should_shoot = abs(distance) < aim_tolerance
+    enemy = find_nearest_enemy(results)
 
-    game.make_action([turn, 1 if should_shoot else 0])
+    if enemy is None:
+        game.make_action([5, 0])
+        return False
 
-    if should_shoot:
-        _logger.info(f"[danger]FIRE![/danger] dist={distance:+d} tol=±{aim_tolerance}")
-    else:
-        _logger.info(f"[info]Tracking[/info] dist={distance:+d} turn={turn:+.1f}")
+    x1, _, x2, _ = enemy["boundarybox"]
+    x_center = enemy["x_center"]
+
+    # Horizontal-Offset: positiv = Feind rechts, negativ = Feind links
+    offset = x_center - screen_center
+    turn_delta = offset * TURN_SENSITIVITY
+
+    # Schießen wenn Fadenkreuz (screen_center) innerhalb der Boundarybox liegt
+    shoot = 1 if x1 <= screen_center <= x2 else 0
+
+    game.make_action([turn_delta, shoot])
+
+    _logger.info(
+        f"[cyan]Target[/cyan] class=[magenta]{enemy['cls_id']}[/magenta] "
+        f"conf={enemy['conf']:.0%}  offset=[yellow]{offset:+d}px[/yellow]  "
+        f"turn={turn_delta:+.1f}  shoot={'[red]YES[/red]' if shoot else 'no'}"
+    )
+    return True
+            
 
 def return_loggs(results, best=None):
     detections = [
@@ -140,7 +157,9 @@ def return_loggs(results, best=None):
         _logger.info("[dim]No detections this frame[/dim]")
         return
 
-    best_cls = best["cls_id"] if best else None
+    best_bbox = tuple(best["boundarybox"]) if best else None
+
+    # Lookup: bbox → distance (einmal berechnen, nicht pro Zeile)
     dist_lookup = {obj["boundarybox"]: obj["distance"] for obj in dist_to_all(results)}
 
     table = Table(
@@ -152,20 +171,23 @@ def return_loggs(results, best=None):
     table.add_column("Weight",       style="magenta", justify="center")
     table.add_column("Confidence",   style="detect",  justify="right")
     table.add_column("Bounding Box", style="yellow")
-    table.add_column("Distance",         style="blue",    justify="center")
-    table.add_column("Best Desition", style="white", justify="center")
+    table.add_column("Distance",     style="blue",    justify="center")
 
     for cls_id, conf, (x1, y1, x2, y2) in sorted(detections, key=lambda d: -class_weights.get(d[0], 0)):
         weight = class_weights.get(cls_id, 0.0)
         conf_bar = "█" * int(conf * 10) + "░" * (10 - int(conf * 10))
         dist = dist_lookup.get((x1, y1, x2, y2), 0)
+        dist_str = (
+            f"[green]{dist:+d}px[/green]"  if abs(dist) <  50 else
+            f"[yellow]{dist:+d}px[/yellow]" if abs(dist) < 150 else
+            f"[red]{dist:+d}px[/red]"
+        )
         table.add_row(
             str(cls_id),
             f"{weight:.1f}",
             f"{conf_bar} {conf:.0%}",
             f"({x1}, {y1}) → ({x2}, {y2})",
-            f"{dist}",
-            f"{best_cls}"
+            dist_str,
         )
 
     console.print(Panel(table, border_style="red", padding=(0, 1)))
@@ -204,9 +226,6 @@ game.new_episode()
 
 # Optional: make enemy passive
 game.send_game_command("notarget")
-width_center = game.get_screen_width() // 2
-
-test_flag = True
 
 # --- Main loop ---
 while True:
@@ -214,9 +233,7 @@ while True:
         game.new_episode()
     frame = game.get_state().screen_buffer
     results = process_frame(frame)
-    if test_flag:
-        best = find_nearest_enemy(results)
-    return_loggs(results, best)
-    movement_check(best)
-    #shooting_check(best)
+    # find_nearest_enemy(results)
+    aim_and_shoot(results)
+    return_loggs(results, best=find_nearest_enemy(results))
     time.sleep(0.2)

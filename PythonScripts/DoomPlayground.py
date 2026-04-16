@@ -2,6 +2,7 @@ import vizdoom as vzd
 from ultralytics import YOLO
 import os
 import time
+import cv2
 import logging
 from datetime import datetime
 
@@ -190,7 +191,6 @@ game.set_mode(vzd.Mode.PLAYER)
 
 # --- Buttons (you MUST define these manually now) ---
 game.add_available_button(vzd.Button.TURN_LEFT_RIGHT_DELTA)
-game.add_available_button(vzd.Button.MOVE_FORWARD)
 game.add_available_button(vzd.Button.ATTACK)
 
 # --- Optional: track useful variables ---
@@ -206,13 +206,17 @@ game.new_episode()
 game.send_game_command("notarget")
 width_center = game.get_screen_width() // 2
 
+test_flag = True
+
 # --- Main loop ---
 while True:
     if game.is_episode_finished():
         game.new_episode()
     frame = game.get_state().screen_buffer
     results = process_frame(frame)
-    best = find_nearest_enemy(results)
+    if test_flag:
+        best = find_nearest_enemy(results)
     return_loggs(results, best)
     movement_check(best)
+    #shooting_check(best)
     time.sleep(0.2)

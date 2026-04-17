@@ -6,12 +6,16 @@ import cv2
 import logging
 from datetime import datetime
 
+import yaml
+
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.table import Table
 from rich.panel import Panel
 from rich import box as rich_box
 from rich.theme import Theme
+
+_script_dir = os.path.dirname(os.path.abspath(__file__))
 
 _theme = Theme({
     "info":    "bold cyan",
@@ -32,7 +36,7 @@ _logger = logging.getLogger("doombot")
 game = vzd.DoomGame()
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 
-model_path = os.path.join(_script_dir, "../DoomDataset/model_weights/trainedyolo.pt")
+model_path = os.path.join(_script_dir, "../DoomDataset/model_weights/newtrainedyolo.pt")
 model = YOLO(model_path)
 
 # if more than enemies(5-13) are in one frame update weights with addition `+´, higher weight higher prio 
@@ -53,22 +57,10 @@ class_weights = {
   13: 1.4
 }
 
-class_names = {
-    0: "medkit",
-    1: "weapons",
-    2: "armor",
-    3: "powerups",
-    4: "objects",
-    5: "baron of hell",
-    6: "cacodemon",
-    7: "cyber demon",
-    8: "demon",
-    9: "lost soul",
-    10: "marine",
-    11: "spiderdemon",
-    12: "zombie",
-    13: "zombie sergeant" 
-}
+with open(os.path.join(_script_dir,"../DoomDataset/model_data/yaml/doom.yaml"), "r") as f:
+    data = yaml.safe_load(f)
+
+class_names = data["names"]
 
 ENEMY_CLASSES = set(range(5, 14)) # All labes are enemies with label 5 - 13
 # width = game.get_screen_width()

@@ -1,59 +1,70 @@
 import VizDoomFunctions as vdf
 import VizDoomSetups as vds
-import gymnasium as gm
-from gymnasium import spaces
 import numpy as np
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv
 
-class DoomEnv(gm.Env):
-    metadata = {'render.modes': ['human']}
-    def __init__(self):
-        super().__init__()
-        self.game = vds.rl_environment()
-        self.actions = [[3],[4],[5],[6], [3,5], [3,6], [4,5], [4,6]]
-        self.action_space = spaces.Discrete(len(self.actions))
-        self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(8,), dtype=np.float32)
-    def reset(self, seed=None, options=None):
-        super().reset(seed=seed)
-        self.game.new_episode()
-        #obs = None
-        obs = self.get_obs() 
-        return obs, {}
-    def step(self, action):
+# -- Buckets --
 
-        reward = self.game.make_action(self.actions[action], 4)
+# Health: 3 Buckets
+# Armor: 3 Buckets
+# Killcount: No Buckets 
 
-        done = self.game.is_episode_finished()
+# -- Actions --
+# 0: Go Heal
+# 1: Go Kill
+# 2: Go Armor
+# 3: Go Look Around
 
-        if done:
-            obs = np.zeros((84, 84, 1), dtype=np.uint8)
-        else:
-            obs = self.get_obs()
+def return_buckets(values):
+    for key, value in values.keys():
+        if key == "health":
+            if value < 30:
+                health_bucket = 0
+            elif value < 70:
+                health_bucket = 1
+            else:
+                health_bucket = 2
+        elif key == "armor":
+            if value < 60:
+                armor_bucket = 0
+            elif value < 140:
+                armor_bucket = 1
+            else:
+                armor_bucket = 2
+    return [health_bucket, armor_bucket]
 
-        return obs, reward, done, False, {}
-    def get_obs(self):
-        state = vdf.get_state(self.game)
-        print("State", state)
-        return state
-    def render(self):
-        pass
-    def close(self):
-        self.game.close()
+def generate_table():
+    q_table = {}
+    for i in range(3):
+        for j in range(3):
+            q_table[(i, j)] = np.zeros(4)  # 4 actions
+            
 
-env = DummyVecEnv([lambda: DoomEnv()])
+# current_state = health, armor, killcount
 
-model = PPO(
-    policy="MlpPolicy",
-    env=env,
-    verbose=1,
-    learning_rate=0.0003,
-    n_steps=1024,
-    batch_size=64,
-    gamma=0.99,
-    gae_lambda=0.95,
-    ent_coef=0.01
-)
+# reward = +killcount, +/- health, +armor
 
-model.learn(total_timesteps=1000000)
-model.save("ppo_doom_model")
+# epsilon-greedy policy
+def epsilon_greedy_policy(Q, state, epsilon):
+    if np.random.rand() < epsilon:
+        return np.random.choice(Q.shape[1])
+    else:
+        return np.argmax(Q[state])
+
+
+        # Q-learning (off-policy TD control) for estimating Q = q*
+def q_learning(alpha, gamma, epsilon, num_episodes):
+    # initialize Q(s, a) for all s in S, a in A(s), arbitrarily except that Q(terminal, .) = 0
+    Q = generate_table()
+    # repeat (for each episode)
+    for episode in range(num_episodes):
+        # initialize S
+        state = env.reset()
+        done = False
+        while not done:
+            # choose A from S using policy derived from Q (e.g., epsilon-greedy)
+            action = epsilon_greedy_policy(Q, state, epsilon)
+            # take action A, observe R, S'
+            next_state, reward, done = env.step(action)
+            Q[state][action] += alpha * (reward + gamma * np.max(Q[next_state]) - Q[state][action])
+            state = next_state
+    return Q

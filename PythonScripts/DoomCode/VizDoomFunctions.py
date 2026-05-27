@@ -334,7 +334,7 @@ class StateMachine():
         return (health_bucket, armor_bucket)
     
     # Find the nearest object out of all of them
-    def __find_nearest_object(self, results, find_object):
+    def _find_nearest_object(self, results, find_object):
         #Searching in all object the object, which is the nearest, with condition the label is in ENEMY_CLASS(5-19)
 
         best = None
@@ -350,7 +350,7 @@ class StateMachine():
                     # If find_object is 2, we want to find the nearest armor, so we skip all objects that are not in ENEMY_CLASSES.
                     is_enemy = find_object == 1 and cls_id in ENEMY_CLASSES and cls_id != 10
                     is_medkit = find_object == 0 and cls_id == 0
-                    is_armor = find_object == 2 and cls_id == 2
+                    is_armor = find_object == 0 and cls_id == 2
                     if is_enemy or is_medkit or is_armor: 
                         x1, y1, x2, y2 = map(int, box.xyxy[0])
                         area = (x2 - x1) * (y2 - y1)
@@ -396,7 +396,7 @@ class StateMachine():
             return None
         return best
     
-    def __get_best_state(self, values):
+    def _get_best_state(self, values):
         # Transform values to buckets
         # Get index from rl model
         # Return state to switch to based on index
@@ -409,7 +409,7 @@ class StateMachine():
         
         
     # How each state works
-    def __go_look_around(self):
+    def _go_look_around(self):
         #Turn and move left plus forward randomly to look around and find targets
         actions  =  [0] * 20
         move_left_amount = random.randint(0,1)
@@ -421,7 +421,7 @@ class StateMachine():
         return actions
         
     # Index_of_object is the same as the index of the chosen state
-    def __go_grab_object(self):
+    def _go_grab_object(self):
         distance = self.target["distance"]
         gain = 0.03 
         max_turn = 8
@@ -441,7 +441,7 @@ class StateMachine():
             return actions
 
 
-    def __go_kill(self):
+    def _go_kill(self):
         gain = 0.03 
         max_turn = 8
         actions = [0] * 20
@@ -477,17 +477,17 @@ class StateMachine():
         #Second switch to the state based on the index
 
         if frame_count % 10 == 0:
-            self.state = self.__get_best_state(values)
-            self.target = self.__find_nearest_object(results, self.state)
+            self.state = self._get_best_state(values)
+            self.target = self._find_nearest_object(results, self.state)
                 
         if self.state == 3 or self.target == None:
-            actions = self.__go_look_around()
+            actions = self._go_look_around()
             
         elif self.state == 0 or self.state == 2:
-            actions = self.__go_grab_object()
+            actions = self._go_grab_object()
             
         elif self.state == 1:
-            actions = self.__go_kill()
+            actions = self._go_kill()
 
             
         else:
@@ -502,30 +502,44 @@ class RL_Model(StateMachine):
 
     def _get_q_table(self):
         q_table = {}
-        for i in range(3):
-            for j in range(3):
-                q_table[(i, j)] = np.zeros(4)
+        for health_states in range(3):
+            for armor_states in range(3):
+                q_table[(health_states, armor_states)] = np.random.uniform(low=-1, high=1, size=(self.num_states,))
         return q_table
 
-    def epsilon_greedy_policy(self, Q, state, epsilon):
-        if np.random.rand() < epsilon:
-            return np.random.choice(4)
-        return int(np.argmax(Q[state]))
+    def _get_best_state(self, Q, state, epsilon):
+        # Transform values to buckets
+        # Get index from rl model
+        # Return state to switch to based on index
+        if np.random.random() < epsilon:
+            index = random.randint(0, 3) # Explore: choose a random action
+        else:
+            index = np.argmax(Q[state]) # Exploit: choose the best known action
+        return index
 
-    def _safe_make_action(self, game, actions, tics=4):
-        """Sanitize the action vector and execute, returning True if episode is still alive."""
-        if game.is_episode_finished():
-            return False
-        n_buttons = game.get_available_buttons_size()
-        # Trim or pad to the actual button count to avoid ViZDoom crashes
-        if len(actions) > n_buttons:
-            actions = actions[:n_buttons]
-        elif len(actions) < n_buttons:
-            actions = actions + [0] * (n_buttons - len(actions))
-        # Ensure all entries are ints (delta buttons accept floats but mixing causes issues)
-        actions = [int(a) for a in actions]
-        game.make_action(actions, tics)
-        return not game.is_episode_finished()
+    def current_state(self, results, values, frame_count, Q, state, epsilon, find_new_target = False):
+        #First gets an index from the rl model
+        #Second switch to the state based on the index
+
+        if find_new_target or frame_count % 10 == 0:
+            self.state = self._get_best_state(Q, state, epsilon)
+            self.target = self._find_nearest_object(results, self.state)
+                
+        if self.state == 3 or self.target == None:
+            actions = self._go_look_around()
+            
+        elif self.state == 0 or self.state == 2:
+            actions = self._go_grab_object()
+            
+        elif self.state == 1:
+            actions = self._go_kill()
+
+            
+        else:
+            print("Invalid state index")
+        return actions
+
+    
 
     def _gather_values(self, game):
         health = game.get_game_variable(vzd.GameVariable.HEALTH)
@@ -536,68 +550,48 @@ class RL_Model(StateMachine):
     def q_learning(self, game, alpha, gamma, epsilon, num_train_episodes,
                    max_steps_per_target=40):
         Q = self.q_table
+        #Q_state accounts for the current health and armor bucket, while new_Q_state accounts for the new health and armor bucket after taking the action
+        #Idea is to update the Q-table based on the change in health, armor and kill count so after Q_state changes
 
         for episode in range(num_train_episodes):
             game.new_episode()
             frame_count = 0
-
+            current_values, current_kill_count = self._gather_values(game)
+            current_Q_state = self._return_buckets(current_values)
             while not game.is_episode_finished():
                 # --- snapshot state BEFORE acting ---
-                values, kill_count = self._gather_values(game)
-                old_buckets = self._return_buckets(values)
+                new_values, new_kill_count = self._gather_values(game)
+                new_Q_state = self._return_buckets(new_values)
 
-                state = game.get_state()
-                if state is None:
+                if new_Q_state is None:
                     break
-                results = process_frame(state.screen_buffer)
+                results = process_frame(game.get_state().screen_buffer)
 
                 # --- choose action via current_state ---
-                actions = self.current_state(results, values, frame_count=frame_count)
-                old_state = self.state
+                actions = self.current_state(results, current_values, frame_count, Q, new_Q_state, epsilon, find_new_target=False)
+                
 
-                # --- execute one "macro step": follow the target up to N tics, OR
-                # just one action if there is no target (look-around) ---
-                steps_in_macro = 0
-                alive = self._safe_make_action(game, actions, tics=4)
-                steps_in_macro += 1
-                frame_count += 1
+                print("Episode:", episode, "Frame:", frame_count, "Current State", self.state, "with target", self.target["cls_id"] if self.target else None, "and", current_Q_state)
+                if current_Q_state[0] == new_Q_state[0] and current_Q_state[1] == new_Q_state[1] and new_kill_count == current_kill_count:
+                    game.make_action(actions)
+                else:
+                    print("State changed from", current_Q_state, "to", new_Q_state, "with kill count change from", current_kill_count, "to", new_kill_count)
+                    print("Updating Q-table for state", self.state, "with the target", self.target["cls_id"] if self.target else None)
+                    delta_health = new_values["health"] - current_values["health"]
+                    delta_armor = new_values["armor"] - current_values["armor"]
+                    delta_kill = new_kill_count - current_kill_count
+                    reward = delta_health + delta_armor + delta_kill * 10
+                    Q[current_Q_state][self.state] += alpha * (
+                        reward
+                        + gamma * np.max(Q[new_Q_state])
+                        - Q[current_Q_state][self.state]
+                    )
+                    self.write_q_table(Q)
+                    actions = self.current_state(results, current_values, frame_count, Q, new_Q_state, epsilon, find_new_target=True)
 
-                while alive and self.target is not None and steps_in_macro < max_steps_per_target:
-                    state = game.get_state()
-                    if state is None:
-                        alive = False
-                        break
-                    # re-evaluate target/action every 10 frames inside the macro step
-                    if frame_count % 10 == 0:
-                        results = process_frame(state.screen_buffer)
-                        values, _ = self._gather_values(game)
-                        actions = self.current_state(results, values, frame_count=frame_count)
-                    alive = self._safe_make_action(game, actions, tics=4)
-                    steps_in_macro += 1
-                    frame_count += 1
-
-                # --- snapshot state AFTER acting ---
-                new_values, kill_count_new = self._gather_values(game)
-                next_buckets = self._return_buckets(new_values)
-
-                # raw deltas (NOT bucket deltas) so the signal is dense
-                delta_health = new_values["health"] - values["health"]
-                delta_armor = new_values["armor"] - values["armor"]
-                delta_kill = kill_count_new - kill_count
-                reward = delta_health + delta_armor + delta_kill * 10
-
-                # --- Q update on the state we actually executed ---
-                Q[old_buckets][old_state] += alpha * (
-                    reward
-                    + gamma * np.max(Q[next_buckets])
-                    - Q[old_buckets][old_state]
-                )
-
-                print(f"Ep {episode} | macro_steps {steps_in_macro} | "
-                      f"state {old_state} | reward {reward:.1f} | "
-                      f"{old_buckets} -> {next_buckets}")
-
-            self.write_q_table(Q)
+                current_values, current_kill_count = self._gather_values(game)
+                current_Q_state = self._return_buckets(current_values)
+                frame_count = (frame_count + 1) % 11
         return Q
 
     def write_q_table(self, q_table):

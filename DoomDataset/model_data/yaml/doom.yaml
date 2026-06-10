@@ -1,7 +1,7 @@
 # Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
-path: C:/Users/Joshu/OneDrive/Desktop/DoomAssets/Neuer Ordner/vizdoom_yolo/DoomDataset/model_data # base path to images and labels
+path: C:/Users/Joshu/OneDrive/Desktop/DoomAssets/Main/vizdoom_yolo/DoomDataset/model_data # base path to images and labels
 train: images/train # train images (relative to 'path') 128 images
-val: images/test # val images (relative to 'path') 128 images
+val: images/val # val images (relative to 'path') 128 images
 test: images/test # test images (optional)
 
 # Classes
@@ -10,21 +10,15 @@ names:
   1: weapons
   2: armor
   3: powerups
-  4: objects
-  5: baron of hell
-  6: cacodemon
-  7: cyber demon
-  8: demon
-  9: lost soul
+  4: baron_of_hell
+  5: demon
+  6: knight
+  7: zombie
+  8: zombie sergeant
+  9: gunner
   10: marine
-  11: spiderdemon
-  12: zombie
-  13: zombie sergeant
-  14: imp
-  15: gunner
-  16: knight
-  17: hallway_medkit
-  18: hallway_weapon
+  11: hallway_medkit
+  12: hallway_weapon
 
 
 

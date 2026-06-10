@@ -1,14 +1,14 @@
 task: detect
 mode: train
-model: C:\Users\Joshu\OneDrive\Desktop\DoomAssets\Neuer Ordner\vizdoom_yolo\PythonScripts\YoloCode\../../DoomDataset/model_weights/yolo11s.pt
-data: C:\Users\Joshu\OneDrive\Desktop\DoomAssets\Neuer Ordner\vizdoom_yolo\PythonScripts\YoloCode\../../DoomDataset/model_data/yaml/doom.yaml
-epochs: 100
+model: C:\Users\Joshu\OneDrive\Desktop\DoomAssets\Main\vizdoom_yolo\PythonScripts\YoloCode\../../DoomDataset/model_weights/yolo11s.pt
+data: C:\Users\Joshu\OneDrive\Desktop\DoomAssets\Main\vizdoom_yolo\PythonScripts\YoloCode\../../DoomDataset/model_data/yaml/doom.yaml
+epochs: 21
 time: null
 patience: 20
 batch: 16
 imgsz: 320
 save: true
-save_period: -1
+save_period: 3
 cache: false
 device: '0'
 workers: 8
@@ -107,4 +107,4 @@ auto_augment: randaugment
 erasing: 0.4
 cfg: null
 tracker: botsort.yaml
-save_dir: C:\Users\Joshu\OneDrive\Desktop\DoomAssets\Neuer Ordner\vizdoom_yolo\DoomDataset\model_weights
+save_dir: C:\Users\Joshu\OneDrive\Desktop\DoomAssets\Main\vizdoom_yolo\DoomDataset\model_weights

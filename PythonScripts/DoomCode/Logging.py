@@ -6,7 +6,7 @@ from rich import box as rich_box
 from rich.theme import Theme
 import logging
 from datetime import datetime
-from VizDoomFunctions import find_distance
+
 
 
 theme = Theme({

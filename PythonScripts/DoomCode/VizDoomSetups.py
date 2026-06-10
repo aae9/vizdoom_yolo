@@ -1,107 +1,11 @@
 import cv2
 import vizdoom as vzd
 import os
-from VizDoomFunctions import check_for_target, process_frame, update_weights, find_priority, movement_check
-from VizDoomFunctions import _script_dir, RL_Model
+from VizDoomFunctions import  process_frame
+from VizDoomFunctions import _script_dir, StateMachine, plot_kills
 from Logging import return_loggs
 import time
 
-def death_match(sleep_time=0):
-    game = vzd.DoomGame()
-
-    # --- Paths ---
-    game.load_config(os.path.join(_script_dir, "../../DoomDataset/environments/deathmatch.cfg"))  # ← change this
-    game.set_doom_game_path(os.path.join(_script_dir, "../../DoomDataset/environments/DOOM2.wad"))  # ← change this
-
-    # --- Screen settings ---
-    game.set_screen_format(vzd.ScreenFormat.RGB24)
-
-    # --- Episode length (very large = effectively infinite) ---
-    game.set_episode_timeout(999999999)
-
-    # --- Mode ---
-    game.set_mode(vzd.Mode.PLAYER)
-
-
-    # --- Optional: track useful variables ---
-    #game.add_available_game_variable(vzd.GameVariable.HEALTH)
-
-    # --- Init ---
-    game.set_window_visible(True)
-    game.init()
-
-    game.new_episode()
-
-    width = game.get_screen_width()
-    target = None
-    frame_count = 0
-    # --- Main loop ---
-    while True:
-        if game.is_episode_finished():
-            game.new_episode()
-            target = None
-        if frame_count % 10 == 0: # Process frame every 10 frames to reduce load
-            frame = game.get_state().screen_buffer
-            results = process_frame(frame)
-        update_weights(results, game.get_game_variable(vzd.GameVariable.HEALTH), game.get_game_variable(vzd.GameVariable.ARMOR), 0)
-        target = find_priority(results)
-        action = movement_check(results, target, width=width)
-        game.make_action(action)
-        return_loggs(results, target, width)
-        time.sleep(sleep_time)
-
-def basic(sleep_time=0.1):
-    game = vzd.DoomGame()
-
-    # --- Paths ---
-    game.load_config(os.path.join(_script_dir, "../../DoomDataset/environments/custom_config.cfg"))  # ← change this
-    game.set_doom_game_path(os.path.join(_script_dir, "../../DoomDataset/environments/DOOM2.wad"))  # ← change this
-    game.set_doom_scenario_path(os.path.join(_script_dir, "../../DoomDataset/environments/basic_notifications.wad"))  # ← change this
-
-    # --- Screen settings ---
-    game.set_screen_format(vzd.ScreenFormat.RGB24)
-
-    # --- Rendering ---
-    game.set_render_hud(False)
-
-    # --- Episode length (very large = effectively infinite) ---
-    game.set_episode_timeout(999999999)
-
-    # --- Mode ---
-    game.set_mode(vzd.Mode.PLAYER)
-
-    # --- Buttons (you MUST define these manually now) ---
-    game.add_available_button(vzd.Button.TURN_LEFT_RIGHT_DELTA)
-    game.add_available_button(vzd.Button.ATTACK)
-
-    # --- Optional: track useful variables ---
-    game.add_available_game_variable(vzd.GameVariable.HEALTH)
-
-    # --- Init ---
-    game.set_window_visible(True)
-    game.init()
-
-    game.new_episode()
-
-    # Optional: make enemy passive
-    game.send_game_command("notarget")
-    width = game.get_screen_width() 
-    target = None
-    frame_count = 0
-    # --- Main loop ---
-    while True:
-        if game.is_episode_finished():
-            game.new_episode()
-            target = None
-        if frame_count % 10 == 0: # Process frame every 10 frames to reduce load
-            frame = game.get_state().screen_buffer
-            results = process_frame(frame)
-        update_weights(results, game.get_game_variable(vzd.GameVariable.HEALTH), game.get_game_variable(vzd.GameVariable.ARMOR), 0)
-        target = find_priority(results)
-        action = movement_check(results, target, width=width)
-        game.make_action(action)
-        return_loggs(results, target, width)
-        time.sleep(sleep_time)
 
 def screenshot_environment():
     import os
@@ -184,7 +88,52 @@ def screenshot_environment():
     game.close()
     cv2.destroyAllWindows()
 
+def state_machine_environment():
+    game = vzd.DoomGame()
+    game.set_screen_format(vzd.ScreenFormat.RGB24)
+    game.load_config(os.path.join(_script_dir, "../../DoomDataset/environments/deathmatch.cfg"))  # ← change this
+    game.set_doom_game_path(os.path.join(_script_dir, "../../DoomDataset/environments/DOOM2.wad"))  # ← change this
+    game.set_window_visible(True)
+    game.init()
+    frame_count = 0
+    machine = StateMachine(game_width=game.get_screen_width())
+    while True:
+        if game.is_episode_finished():
+            machine = StateMachine(game_width=game.get_screen_width())
+            game.new_episode()
+            frame_count = 0
+        frame = game.get_state().screen_buffer
+        results = process_frame(frame)
+        action = machine.current_state(results = results, values = [game.get_game_variable(vzd.GameVariable.HEALTH), game.get_game_variable(vzd.GameVariable.ARMOR), game.get_game_variable(vzd.GameVariable.SELECTED_WEAPON), game.get_game_variable(vzd.GameVariable.SELECTED_WEAPON_AMMO)], frame_count=frame_count)
+        game.make_action(action)
+        frame_count += 1
+    game.close()    
 
+def excercise_environment(num_episodes=5):
+    total_kills = []
+    game = vzd.DoomGame()
+    game.set_screen_format(vzd.ScreenFormat.RGB24)
+    game.load_config(os.path.join(_script_dir, "../../DoomDataset/environments/deathmatch.cfg"))  # ← change this
+    game.set_doom_game_path(os.path.join(_script_dir, "../../DoomDataset/environments/DOOM2.wad"))  # ← change this
+    game.set_window_visible(False)
+    game.init()
+    for episode in range(num_episodes):
+        summed_kills = 0
+        game.new_episode()
+        frame_count = 0
+        machine = StateMachine(game_width=game.get_screen_width())
+        while not game.is_episode_finished():
+            frame = game.get_state().screen_buffer
+            results = process_frame(frame)
+            action = machine.current_state(results = results, values = [game.get_game_variable(vzd.GameVariable.HEALTH), game.get_game_variable(vzd.GameVariable.ARMOR), game.get_game_variable(vzd.GameVariable.SELECTED_WEAPON), game.get_game_variable(vzd.GameVariable.SELECTED_WEAPON_AMMO)], frame_count=frame_count)
+            game.make_action(action)
+            frame_count += 1
+            summed_kills = game.get_game_variable(vzd.GameVariable.KILLCOUNT)
+        total_kills.append(summed_kills)
+    game.close()
+    plot_kills(total_kills)
+    return total_kills
+"""         
 def rl_environment_deathmatch():
     game = vzd.DoomGame()
     game.set_screen_format(vzd.ScreenFormat.RGB24)
@@ -196,3 +145,4 @@ def rl_environment_deathmatch():
     rl_model = RL_Model(game_width=game.get_screen_width())
     rl_model.q_learning(game, alpha=0.1, gamma=0.9, epsilon=0.1, num_train_episodes=3000)
     game.close()
+"""

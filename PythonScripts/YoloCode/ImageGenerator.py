@@ -3,6 +3,7 @@ import numpy as np
 import os
 import random
 import cv2
+import tqdm
 
 np.set_printoptions(threshold=np.inf)
 
@@ -31,24 +32,19 @@ os.makedirs(destination_folder_labels, exist_ok=True)
 # =====================================================
 class_labels = {
     "medkit_sprites": 0,
-    "weapons_sprites": 1,
+    "weapon_sprites": 1,
     "armor_sprites": 2,
     "powerups_sprites": 3,
-    "baron_of_hell_sprites": 5,
-    "cacodemon_sprites": 6,
-    "cyber_demon_sprites": 7,
-    "demon_sprites": 8,
-    "lost_soul_sprites": 9,
+    "baron_of_hell_sprites": 4,
+    "demon_sprites": 5,
+    "knight_sprites": 6,
+    "zombie_sprites": 7,
+    "zombie_sergeant_sprites": 8,
+    "gunner_sprites": 9,
     "marine_sprites": 10,
-    "spiderdemon_sprites": 11,
-    "zombie_sprites": 12,
-    "zombie_sergeant_sprites": 13,
-    "imp_sprites": 14,
-    "gunner_sprites": 15,
-    "knight_sprites": 16,
-    "hallway_medkit": 17,
-    "hallway_weapon": 18,
-    "corpse_sprites": 19,
+    "hallway_medkit": 11,
+    "hallway_weapon": 12,
+    "corpse_sprites": 13,
 
 
 }
@@ -134,7 +130,7 @@ def find_valid_position(W, H, w, h, boxes, max_attempts=100):
 # =====================================================
 # Main Generator
 # =====================================================
-def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="train"):
+def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="train", target_folder=None):
     # Load background files
     background_files = [
         f for f in os.listdir(folder_path_backgrounds)
@@ -156,7 +152,11 @@ def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="t
 
         folder_path = os.path.join(sprites_root, sprite_folder)
 
+
         if not os.path.isdir(folder_path):
+            continue
+
+        if target_folder is not None and sprite_folder != target_folder:
             continue
 
         for sprite_file in os.listdir(folder_path):
@@ -176,7 +176,7 @@ def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="t
             # =====================================================
             # Close samples
             # =====================================================
-            for j in range(samples_up_close):
+            for j in tqdm.tqdm(range(samples_up_close), desc=f"Generating close samples for {sprite_file}"):
 
                 label_lines = []
                 blocked_boxes = []
@@ -237,7 +237,7 @@ def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="t
                 # -----------------------------------
                 # YOLO Label
                 # -----------------------------------
-                if class_id != 19:
+                if class_id != 13:
 
                     x_center = (x_offset + new_w / 2) / W
                     y_center = (y_offset + new_h / 2) / H
@@ -329,7 +329,7 @@ def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="t
                 # -----------------------------------
                 # YOLO Label
                 # -----------------------------------
-                if class_id != 19:
+                if class_id != 13:
 
                     x_center = (x_offset + new_w / 2) / W
                     y_center = (y_offset + new_h / 2) / H
@@ -395,7 +395,7 @@ def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="t
 
                     blocked_boxes.append((x, y, x+rw, y+rh))
 
-                    if r_class != 19:
+                    if r_class != 13:
                         label_lines.append(
                             f"{r_class} {(x+rw/2)/W:.6f} {(y+rh/2)/H:.6f} {rw/W:.6f} {rh/H:.6f}"
                         )
@@ -505,6 +505,6 @@ def show_image_with_labels(index):
 
 # Make sure to add red filtering over some images to add detection when taking damage
 
-generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="test")
+generate_data(samples_up_close=60, samples_multiple_sprites=100, folder_name="train", target_folder="weapon_sprites")
 
-#show_image_with_labels(0)
+#show_image_with_labels(0) 

@@ -1,9 +1,7 @@
 import os
 from ultralytics import YOLO
-import random
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-test_image = r"C:\Users\Joshu\OneDrive\Desktop\DoomAssets\Main\vizdoom_yolo\DoomDataset\test_data\GrayMarine.png"
 test_img_path = os.path.join(_script_dir, "../../DoomDataset/test_data/GrayMarine.png")
 
 # weights from folder

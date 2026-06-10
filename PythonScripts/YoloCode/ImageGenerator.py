@@ -45,15 +45,12 @@ class_labels = {
     "hallway_medkit": 11,
     "hallway_weapon": 12,
     "corpse_sprites": 13,
-
-
 }
 
 # =====================================================
 # Helpers
 # =====================================================
 def IoU(box1, box2):
-    #print("Calculating IoU for boxes:", box1, box2)
     x1, y1, x2, y2 = box1
     x1_p, y1_p, x2_p, y2_p = box2
     top_left_x = max(x1, x1_p)
@@ -72,12 +69,11 @@ def IoU(box1, box2):
 
 def alpha_paste(background, sprite, x_offset, y_offset):
     h, w = sprite.shape[:2]
-
     alpha = sprite[:, :, 3] > 0
     region = background[y_offset:y_offset+h, x_offset:x_offset+w]
     region[alpha] = sprite[:, :, :3][alpha]
 
-
+#Used for the hallways to make sure the boxes are used
 def load_bg_boxes(bg_name, W, H):
     """
     Reads matching txt annotation for background image.
@@ -131,6 +127,10 @@ def find_valid_position(W, H, w, h, boxes, max_attempts=100):
 # Main Generator
 # =====================================================
 def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="train", target_folder=None):
+    #Samples up close: Large sprites placed close to the camera
+    #Samples multiple sprites: More complex scenes with multiple smaller sprites and clutter
+    #target_folder: If specified, only generate data for sprites in this folder
+
     # Load background files
     background_files = [
         f for f in os.listdir(folder_path_backgrounds)
@@ -307,7 +307,6 @@ def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="t
                 # -----------------------------------
                 # find free placement
                 # -----------------------------------
-                #rint(f"Placing sprite '{sprite_file}' of class {class_id} with size ({new_w}, {new_h}) on background '{bg_name}' with existing blocked boxes: {blocked_boxes}")
                 x_offset, y_offset = find_valid_position(
                     W, H, new_w, new_h, blocked_boxes
                 )
@@ -418,93 +417,9 @@ def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="t
 
                 with open(label_path, "w") as f:
                     f.write("\n".join(label_lines))
-            
-                # Similar process as above, but with multiple sprites and more complex label management
-                # For brevity, this part is not fully implemented here, but would involve:
-                # - Randomly selecting multiple sprites
-                # - Placing them on the background while checking for overlaps
-                # - Generating labels for all placed sprites
                 
 
-        
-
-
 # =====================================================
 # Run
 # =====================================================
-
-
-# =====================================================
-# Visualizer
-# =====================================================
-def show_image_with_labels(index):
-
-    img_path = os.path.join(
-        destination_folder_images + folder_types[0],
-        f"image_{index}.png"
-    )
-
-    label_path = os.path.join(
-        destination_folder_labels + folder_types[0],
-        f"image_{index}.txt"
-    )
-
-    img = cv2.imread(img_path)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-    H, W = img.shape[:2]
-
-    fig, ax = plt.subplots(figsize=(12, 8))
-    ax.imshow(img)
-
-    if os.path.exists(label_path):
-
-        with open(label_path, "r") as f:
-            lines = f.readlines()
-
-        for line in lines:
-
-            cls, xc, yc, w, h = map(float, line.strip().split())
-
-            xc *= W
-            yc *= H
-            w *= W
-            h *= H
-
-            x1 = xc - w/2
-            y1 = yc - h/2
-
-            rect = patches.Rectangle(
-                (x1, y1),
-                w,
-                h,
-                linewidth=2,
-                edgecolor="lime",
-                facecolor="none"
-            )
-
-            ax.add_patch(rect)
-
-            ax.text(
-                x1,
-                y1 - 5,
-                str(int(cls)),
-                color="yellow",
-                fontsize=10,
-                backgroundcolor="black"
-            )
-
-    plt.axis("off")
-    plt.tight_layout()
-    plt.show()
-
-
-# =====================================================
-# Run
-# =====================================================
-
-# Make sure to add red filtering over some images to add detection when taking damage
-
-generate_data(samples_up_close=60, samples_multiple_sprites=100, folder_name="train", target_folder="weapon_sprites")
-
-#show_image_with_labels(0) 
+generate_data(samples_up_close=60, samples_multiple_sprites=100, folder_name="train", target_folder=None)

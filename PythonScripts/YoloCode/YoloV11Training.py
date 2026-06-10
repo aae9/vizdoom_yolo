@@ -5,10 +5,9 @@ from ultralytics import YOLO
 def main():
     _script_dir = os.path.dirname(os.path.abspath(__file__))
     #model to use
-    model = YOLO(os.path.join(_script_dir, "../../DoomDataset/model_weights/yolo11s.pt"))  # ← change this to your desired model checkpoint"))
+    model = YOLO(os.path.join(_script_dir, "../../DoomDataset/model_weights/yolo11s.pt")) 
 
     #yaml to use
-
     yaml = os.path.join(_script_dir, "../../DoomDataset/model_data/yaml/doom.yaml")
     model.train(
         data=yaml,

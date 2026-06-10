@@ -103,7 +103,8 @@ def state_machine_environment():
             game.new_episode()
             frame_count = 0
         frame = game.get_state().screen_buffer
-        results = process_frame(frame)
+        if frame_count % 5 == 0:
+            results = process_frame(frame)
         action = machine.current_state(results = results, values = [game.get_game_variable(vzd.GameVariable.HEALTH), game.get_game_variable(vzd.GameVariable.ARMOR), game.get_game_variable(vzd.GameVariable.SELECTED_WEAPON), game.get_game_variable(vzd.GameVariable.SELECTED_WEAPON_AMMO)], frame_count=frame_count)
         game.make_action(action)
         frame_count += 1
@@ -124,7 +125,8 @@ def excercise_environment(num_episodes=5):
         machine = StateMachine(game_width=game.get_screen_width())
         while not game.is_episode_finished():
             frame = game.get_state().screen_buffer
-            results = process_frame(frame)
+            if frame_count % 5 == 0:
+                results = process_frame(frame)
             action = machine.current_state(results = results, values = [game.get_game_variable(vzd.GameVariable.HEALTH), game.get_game_variable(vzd.GameVariable.ARMOR), game.get_game_variable(vzd.GameVariable.SELECTED_WEAPON), game.get_game_variable(vzd.GameVariable.SELECTED_WEAPON_AMMO)], frame_count=frame_count)
             game.make_action(action)
             frame_count += 1

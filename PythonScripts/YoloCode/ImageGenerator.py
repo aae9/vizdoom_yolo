@@ -34,7 +34,7 @@ class_labels = {
     "medkit_sprites": 0,
     "weapon_sprites": 1,
     "armor_sprites": 2,
-    "powerups_sprites": 3,
+    "ammo_sprites": 3,
     "baron_of_hell_sprites": 4,
     "demon_sprites": 5,
     "knight_sprites": 6,
@@ -112,6 +112,8 @@ def load_bg_boxes(bg_name, W, H):
 
 def find_valid_position(W, H, w, h, boxes, max_attempts=100):
     for _ in range(max_attempts):
+        if w >= W or h >= H:
+            return None, None
         x = random.randint(0, W - w)
         y = random.randint(0, H - h)
 
@@ -126,10 +128,11 @@ def find_valid_position(W, H, w, h, boxes, max_attempts=100):
 # =====================================================
 # Main Generator
 # =====================================================
-def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="train", target_folder=None):
+def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="train", target_folder=None, clutter_folders=None):
     #Samples up close: Large sprites placed close to the camera
     #Samples multiple sprites: More complex scenes with multiple smaller sprites and clutter
     #target_folder: If specified, only generate data for sprites in this folder
+    #clutter_folders: If specified, only generate clutter data for sprites in these folders
 
     # Load background files
     background_files = [
@@ -200,6 +203,10 @@ def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="t
                     W / sprite.shape[1],
                     H / sprite.shape[0]
                 ) / 1.1
+
+                if max_scale <= 0:
+                    print(f"Sprite '{sprite_file}' is too large for background '{bg_name}' even at minimum scale. Skipping.")
+                    continue
 
                 scale = random.uniform(2.5, max_scale)
 
@@ -344,8 +351,10 @@ def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="t
                 clutter_count = random.randint(1, 3)
 
                 for _ in range(clutter_count):
-
-                    rand_folder = random.choice(sprite_folders)
+                    if clutter_folders is None:
+                        rand_folder = random.choice(sprite_folders)
+                    else:
+                        rand_folder = random.choice(clutter_folders)
                     rand_path = os.path.join(sprites_root, rand_folder)
 
                     rand_files = [
@@ -422,4 +431,4 @@ def generate_data(samples_up_close=1, samples_multiple_sprites=1, folder_name="t
 # =====================================================
 # Run
 # =====================================================
-generate_data(samples_up_close=60, samples_multiple_sprites=100, folder_name="train", target_folder=None)
+generate_data(samples_up_close=10, samples_multiple_sprites=10, folder_name="val", target_folder="medkit_sprites", clutter_folders=["weapon_sprites", "armor_sprites", "medkit_sprites", "ammo_sprites"])

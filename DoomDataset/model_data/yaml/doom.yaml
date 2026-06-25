@@ -2,14 +2,14 @@
 path: C:/Users/Joshu/OneDrive/Desktop/DoomAssets/Main/vizdoom_yolo/DoomDataset/model_data # base path to images and labels
 train: images/train # train images (relative to 'path') 128 images
 val: images/val # val images (relative to 'path') 128 images
-test: images/test # test images (optional)
+test: images/val # test images (optional)
 
 # Classes
 names:
   0: medkit
   1: weapons
   2: armor
-  3: powerups
+  3: ammo
   4: baron_of_hell
   5: demon
   6: knight

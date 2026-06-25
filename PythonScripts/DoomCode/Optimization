@@ -1,0 +1,318 @@
+import os
+import random
+import numpy as np
+from ultralytics import YOLO
+import cv2
+import optuna
+from VizDoomSetups import excercise_environment
+
+attack = 0
+move_right = 3
+move_left = 4
+move_backward = 5
+move_forward = 6
+turn_left_right_delta = 18
+
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+model_path = os.path.join(_script_dir, "../../DoomDataset/model_weights/finetuned/weights/best.pt")
+model = YOLO(model_path)
+
+ENEMY_CLASSES = set(range(4, 11)) # All labes are enemies with label 5 - 16#
+
+#Used to Convert the frame from ViZDoom to a format that can be used by YOLO and run the model on it, returning the results
+def process_frame(frame):
+     # Convert to RGB (ViZDoom gives BGR)
+    frame = frame[:, :, ::-1]
+    # Run YOLOv11
+    results = model(frame, conf = 0.7, save=False, verbose=False)
+    #print(results)
+    return results
+
+#State machine with custom weights:
+class StateMachine():
+    def __init__(self, game_width, 
+                 max_lost_target_count=50, 
+                 max_search_medbay_timer=400, 
+                 turning_switch=50, 
+                 health_weight=0.4, 
+                 armor_weight=0.3, 
+                 enemy_weight=0.2, 
+                 weapon_weight=0.1,
+                 max_turn=8,
+                 gain=0.03,
+                 aim_tolerance=15):
+        #Generic
+        self.state = 3
+        self.game_width = game_width
+        self.action = [0] * 20
+        #Targeting
+        self.target = None
+        self.lost_target_count = 0
+        self.max_lost_target_count = max_lost_target_count
+        self.last_turning_direction = 0
+        self.last_known_position = None
+        self.look_step = 0
+        self.turning_switch = turning_switch
+        self.move = False
+        #Weapon management
+        self.weapon_ammo_memory = [0] * 7 # Memory for ammo count of each weapon to detect when ammo is depleted
+        self.current_weapon = 0
+        #Health 
+        self.health_memory = 100
+        #State management
+        self.search_medbay_timer = 0
+        self.max_search_medbay_timer = max_search_medbay_timer
+        #Weights
+        self.health_weight = health_weight
+        self.armor_weight = armor_weight
+        self.enemy_weight = enemy_weight
+        self.weapon_weight = weapon_weight
+        #Kill state parameters
+        self.max_turn = max_turn
+        self.gain = gain
+        self.aim_tolerance = aim_tolerance
+
+    # Main calculations
+    def main(self, results, values, frame_count):
+        self.action = [0] * 20
+        if frame_count % 5 == 0 or self.target is None:
+            health = values[0]
+            armor = values[1]
+            selected_weapon = values[2]
+            current_ammo = values[3]
+
+            self.switch_weapons(selected_weapon, current_ammo)
+
+            enemy_count = sum(1 for result in results for box in result.boxes if int(box.cls[0]) in ENEMY_CLASSES) # Count enemies in frame
+            medkit_count = sum(1 for result in results for box in result.boxes if int(box.cls[0]) == 0 or int(box.cls[0]) == 11) # Count medkits in frame
+
+            self.update_weights(health, armor, enemy_count, medkit_count)
+            self._find_possible_targets(results) 
+            self.last_known_position = self.target["x_center"] if self.target is not None else self.last_known_position
+        
+        #Changes the states based on self.state
+        #Looking around and following a lost target 
+        if self.search_medbay_timer > self.max_search_medbay_timer:
+            self.state = 4 # If we have been searching for a medbay for too long, switch to kill state to try to get frags instead
+        else:
+            if self.state == 0 or self.state == 2:
+                self.search_medbay_timer += 1
+        if self.state == 3 or self.target == None:
+            self.lost_target_count += 1
+            self._go_look_around(should_turn = self.lost_target_count > self.max_lost_target_count)
+            if self.lost_target_count > self.max_lost_target_count:
+                self.last_known_position = None
+            
+            
+        elif self.state == 0 or self.state == 2 or self.state == 1:
+            self._go_grab_object()
+            
+        elif self.state == 4:
+            self._go_kill()
+
+        else:
+            print("Invalid state index")
+
+        if self.action[turn_left_right_delta] != 0:
+            self.last_turning_direction = 0 if self.action[turn_left_right_delta] > 0 else 1
+        
+        if self.health_memory > values[0] : # If health increased, we probably picked up a medkit, so we reset the health memory to give more weight to picking up medkits again if needed
+            self.action[attack] = 1
+            self.health_memory = values[0]
+       
+        return self.action
+    
+    def update_weights(self, health, armor, enemy_count, medkit_count):
+        #armor has a range from 0 to 200    
+        if armor is not None:
+            armor_weight = max(0.1, (200 - armor) / 200 * 0.3)     # More weight if armor is low
+        else:
+            armor_weight = 0
+
+        enemy_weight = max(0, enemy_count*4/10* self.enemy_weight)         # More weight if there are more enemies, with a cap at 10 enemies
+        health_weight = max(0, (100-health)/100 * self.health_weight)   # More weight if there are more medkits, with a cap at 10 medkits
+        num_weapons = (1 for weapon in self.weapon_ammo_memory if weapon > 0)
+        weapon_weight = max(0, (2 - sum(num_weapons)) / 2 * self.weapon_weight) # More weight for weapons early in the episode, to encourage picking up weapons at the start
+        if np.argmax([health_weight, armor_weight, enemy_weight, weapon_weight]) == 0:
+            self.state = 0 # Go for health
+        elif np.argmax([health_weight, armor_weight, enemy_weight, weapon_weight]) == 1:
+            self.state = 2 # Go for armor
+        elif np.argmax([health_weight, armor_weight, enemy_weight, weapon_weight]) == 2:
+            self.state = 4 # Go for kill
+        elif np.argmax([health_weight, armor_weight, enemy_weight, weapon_weight]) == 3:
+            self.state = 1 # Go for weapon
+
+    def switch_weapons(self, selected_weapon, current_ammo):
+        selected_weapon = int(selected_weapon)
+        current_ammo = int(current_ammo)
+        self.weapon_ammo_memory[selected_weapon] = current_ammo
+        #Switch to best weapon
+        if current_ammo == 0 or selected_weapon != self.current_weapon or selected_weapon == 0:
+            self.current_weapon = selected_weapon
+            if self.weapon_ammo_memory[3] > 0:
+                self.action[11] = 1 # Select weapon 5 (Rocket Launcher)
+            elif self.weapon_ammo_memory[6] > 0:
+                self.action[14] = 1 # Select weapon 6
+            elif self.weapon_ammo_memory[4] > 0:
+                self.action[12] = 1 # Select weapon 4
+            elif self.weapon_ammo_memory[2] > 0:
+                self.action[10] = 1 # Select weapon 2
+            elif self.weapon_ammo_memory[1] > 0:
+                self.action[9] = 1 # Select weapon 1
+
+    def _find_possible_targets(self, results):
+        possible_targets = []
+        for result in results:
+            for box in result.boxes:
+                cls_id = int(box.cls[0])
+                # If the current state is to go for health, look for medkits or hallways
+                if  (cls_id == self.state or (self.state == 1 and cls_id == 12 or cls_id == 3 and self.state == 1) 
+                    or (self.state == 0 and cls_id == 11) 
+                    or (self.state == 2 and cls_id == 11) 
+                    or (self.state == 4 and cls_id in ENEMY_CLASSES)):
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    possible_targets.append({
+                        "cls_id": cls_id,                   # class
+                        "conf": float(box.conf[0]),         # confidence 0-100
+                        "boundarybox": (x1, y1, x2, y2),    # hitbox, from yolo
+                        "x_center":  (x1 + x2) // 2,        # center for aiming
+                        "distance": -((self.game_width // 2) - ((x1 + x2) // 2))
+                    })
+        self._find_nearest_object(possible_targets)
+
+    
+    # Find the nearest object out of all of them
+    def _find_nearest_object(self, possible_targets):
+        #Searching in all object the object, which is the nearest, with condition the label is in ENEMY_CLASS(5-19)
+        if not possible_targets:
+            self.target = None
+            return
+        best = None
+        best_distance = float('inf')
+        for target in possible_targets:
+            if target["distance"] < best_distance:
+                best = target
+                best_distance = target["distance"]
+        self.target = best
+        self.lost_target_count = 0 # Reset lost target count when we have a target
+
+
+    def _go_look_around(self, should_turn=True):
+        # Alternate:
+        # 0 -> walk
+        # 1 -> turns
+            self.look_step += 1
+            if self.look_step % self.turning_switch == 0:
+                self.move = not self.move
+
+            if self.move:
+                # WALK PHASE
+                if self.search_medbay_timer > self.max_search_medbay_timer:
+                    self.action[move_backward] = 0
+                else:
+                    self.action[move_forward] = 1
+
+                # occasionally strafe
+                if random.random() < 0.2:
+                    self.action[move_left] = 1
+
+            else:
+                # TURN PHASE
+                if self.search_medbay_timer > self.max_search_medbay_timer:
+                    self.action[move_backward] = 0
+                else:
+                    self.action[move_forward] = 1
+                if should_turn:
+                    turn = random.randint(6, 10)
+
+                    if self.last_turning_direction == 0:
+                        self.action[turn_left_right_delta] = turn
+                    else:
+                        self.action[turn_left_right_delta] = -turn
+       
+
+    # Index_of_object is the same as the index of the chosen state
+    def _go_grab_object(self):
+        distance = self.target["distance"]
+        gain = 0.03 
+        max_turn = 8
+        turn = distance * gain
+        turn = max(-max_turn, min(max_turn, turn))
+        
+        if turn > 0:
+            if random.random() < 0.1:
+                self.action[turn_left_right_delta] = -turn
+            else:
+                self.action[turn_left_right_delta] = turn
+            self.action[move_right] = 1
+            self.action[move_forward] = 1
+            return self.action        #
+        else:
+            if random.random() < 0.1:
+                self.action[turn_left_right_delta] = -turn
+            else:
+                self.action[turn_left_right_delta] = turn
+            self.action[move_left] = 1
+            self.action[move_forward] = 1
+            return self.action
+
+
+    def _go_kill(self):
+        gain = self.gain
+        max_turn = self.max_turn
+        distance = self.target["distance"]
+        bbox_w = self.target["boundarybox"][2] - self.target["boundarybox"][0]
+        aim_tolerance = self.aim_tolerance
+        should_shoot = abs(distance) < aim_tolerance
+        turn = distance * gain
+        turn = max(-max_turn, min(max_turn, turn))
+        if turn > 0:
+            self.action[turn_left_right_delta] = turn
+            self.action[attack] = should_shoot
+            self.action[move_right] = 1
+            self.action[move_backward] = 1
+            return self.action
+        else:
+            self.action[turn_left_right_delta] = turn
+            self.action[attack] = should_shoot
+            self.action[move_left] = 1
+            self.action[move_backward] = 1
+            return self.action
+
+    
+def optimize_weights(trial):
+    health_weight = trial.suggest_float('health_weight', 0.0, 1.0)
+    armor_weight = trial.suggest_float('armor_weight', 0.0, 1.0)
+    enemy_weight = trial.suggest_float('enemy_weight', 0.0, 1.0)
+    weapon_weight = trial.suggest_float('weapon_weight', 0.0, 1.0)
+    max_turn = trial.suggest_float('max_turn', 1.0, 20.0)
+    gain = trial.suggest_float('gain', 0.01, 0.1)
+    aim_tolerance = trial.suggest_float('aim_tolerance', 5.0, 30.0)
+    max_search_medbay_timer = trial.suggest_int('max_search_medbay_timer', 100, 500)
+    max_lost_target_count = trial.suggest_int('max_lost_target_count', 10, 100)
+    turning_switch = trial.suggest_int('turning_switch', 10, 100)
+
+    machine = StateMachine(game_width=320, max_search_medbay_timer=max_search_medbay_timer, max_lost_target_count=max_lost_target_count, turning_switch=turning_switch, health_weight=health_weight, armor_weight=armor_weight, enemy_weight=enemy_weight, weapon_weight=weapon_weight, max_turn=max_turn, gain=gain, aim_tolerance=aim_tolerance)
+    mean_acceptable_range = 3
+    saved_rewards = []
+    for i in range(3):
+        # Run the game loop and return the total reward for this set of weights
+        total_reward = excercise_environment(10, machine)
+        mean_reward = sum(total_reward) / len(total_reward)
+        saved_rewards.append(mean_reward)
+        if mean_reward < 10-mean_acceptable_range:
+            return sum(saved_rewards) / len(saved_rewards)
+    return sum(saved_rewards) / len(saved_rewards)
+
+def run_trial():
+    study = optuna.create_study(direction='maximize', sampler=optuna.samplers.TPESampler())
+    study.optimize(optimize_weights, n_trials=50)
+    print("Best trial:")
+    trial = study.best_trial
+    print(f"  Value: {trial.value}")
+    print("  Params: ")
+    for key, value in trial.params.items():
+        print(f"    {key}: {value}")
+
+if __name__ == "__main__":
+    run_trial()

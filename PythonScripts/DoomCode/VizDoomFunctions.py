@@ -32,7 +32,7 @@ available_buttons =
         TURN_LEFT   8
 
         SELECT_WEAPON1  9
-        SELECT_WEAPON2  10
+        SELECT_WEAPON2  10 # Handgun
         SELECT_WEAPON3  11
         SELECT_WEAPON4  12
         SELECT_WEAPON5  13
@@ -97,11 +97,14 @@ class StateMachine():
         self.move = False
         #Weapon management
         self.weapon_ammo_memory = [0] * 7 # Memory for ammo count of each weapon to detect when ammo is depleted
+        self.weapon_ammo_memory[3] = 1
         self.current_weapon = 0
         #Health 
         self.health_memory = 100
         #State management
         self.search_medbay_timer = 0
+        self.turn_90_degrees = 0
+        self.found_medbay = False
 
     # Main calculations
     def main(self, results, values, frame_count):
@@ -123,13 +126,9 @@ class StateMachine():
         
         #Changes the states based on self.state
         #Looking around and following a lost target 
-        if self.search_medbay_timer > 300:
-            self.state = 4 # If we have been searching for a medbay for too long, switch to kill state to try to get frags instead
-        else:
-            if self.state == 0 or self.state == 2:
-                self.search_medbay_timer += 1
 
-        if self.state == 3 or self.target == None:
+
+        if (self.state == 3 or self.target == None) and self.state != 5:
             self.lost_target_count += 1
             self._go_look_around(should_turn = self.lost_target_count > 30)
             if self.lost_target_count > 100:
@@ -142,6 +141,9 @@ class StateMachine():
         elif self.state == 4:
             self._go_kill()
 
+        elif self.state == 5:
+            self._find_medbay()
+
         else:
             print("Invalid state index")
 
@@ -151,6 +153,7 @@ class StateMachine():
         if self.health_memory > values[0] : # If health increased, we probably picked up a medkit, so we reset the health memory to give more weight to picking up medkits again if needed
             self.action[attack] = 1
             self.health_memory = values[0]
+        
        
         return self.action
     
@@ -164,7 +167,12 @@ class StateMachine():
         enemy_weight = max(0, enemy_count*4/10)         # More weight if there are more enemies, with a cap at 10 enemies
         health_weight = max(0, (100-health)/100)   # More weight if there are more medkits, with a cap at 10 medkits
         num_weapons = (1 for weapon in self.weapon_ammo_memory if weapon > 0)
-        weapon_weight = max(0, (2 - sum(num_weapons)) / 2) # More weight for weapons early in the episode, to encourage picking up weapons at the start
+        weapon_weight = max(0, (3 - sum(num_weapons)) / 3) # More weight for weapons early in the episode, to encourage picking up weapons at the start
+        if not self.found_medbay and weapon_weight < 0.1:
+            self.state = 5 # Go find medbay if we haven't found it yet
+            return
+
+
         if np.argmax([health_weight, armor_weight, enemy_weight, weapon_weight]) == 0:
             self.state = 0 # Go for health
         elif np.argmax([health_weight, armor_weight, enemy_weight, weapon_weight]) == 1:
@@ -176,21 +184,23 @@ class StateMachine():
 
     def switch_weapons(self, selected_weapon, current_ammo):
         selected_weapon = int(selected_weapon)
+        weapon_index = selected_weapon 
         current_ammo = int(current_ammo)
-        self.weapon_ammo_memory[selected_weapon] = current_ammo
+        if current_ammo != self.weapon_ammo_memory[weapon_index]:
+            self.weapon_ammo_memory[weapon_index] = current_ammo
         #Switch to best weapon
         if current_ammo == 0 or selected_weapon != self.current_weapon or selected_weapon == 0:
+            print(f"Switching weapon from {self.current_weapon} to {selected_weapon}")
             self.current_weapon = selected_weapon
             if self.weapon_ammo_memory[3] > 0:
-                self.action[11] = 1 # Select weapon 5 (Rocket Launcher)
+                self.action[11] = 1 # Select weapon 3 Shotgun
             elif self.weapon_ammo_memory[6] > 0:
                 self.action[14] = 1 # Select weapon 6
             elif self.weapon_ammo_memory[4] > 0:
                 self.action[12] = 1 # Select weapon 4
             elif self.weapon_ammo_memory[2] > 0:
                 self.action[10] = 1 # Select weapon 2
-            elif self.weapon_ammo_memory[1] > 0:
-                self.action[9] = 1 # Select weapon 1
+
 
     def _find_possible_targets(self, results):
         possible_targets = []
@@ -201,7 +211,8 @@ class StateMachine():
                 if  (cls_id == self.state or (self.state == 1 and cls_id == 12 or cls_id == 3 and self.state == 1) 
                     or (self.state == 0 and cls_id == 11) 
                     or (self.state == 2 and cls_id == 11) 
-                    or (self.state == 4 and cls_id in ENEMY_CLASSES)):
+                    or (self.state == 4 and cls_id in ENEMY_CLASSES)
+                    or (self.state == 5 and cls_id == 0)): # If we are looking for medbay, look for medkits
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     possible_targets.append({
                         "cls_id": cls_id,                   # class
@@ -295,7 +306,7 @@ class StateMachine():
         distance = self.target["distance"]
         bbox_w = self.target["boundarybox"][2] - self.target["boundarybox"][0]
         aim_tolerance = max(bbox_w *0.5, 15)
-        should_shoot = abs(distance) < aim_tolerance
+        should_shoot = True
         turn = distance * gain
         turn = max(-max_turn, min(max_turn, turn))
         if turn > 0:
@@ -310,6 +321,37 @@ class StateMachine():
             self.action[move_left] = 1
             self.action[move_backward] = 1
             return self.action
+
+    def _find_medbay(self):
+        self.action = [0] * 20
+        self.action[11] = 1 # Select weapon 3 Shotgun
+        self.search_medbay_timer += 1
+        if self.search_medbay_timer > 250:
+            self.found_medbay = True
+        if self.turn_90_degrees < 80:
+            self.action[turn_left_right_delta] = 8
+            self.turn_90_degrees += 8
+        elif self.target is None:
+            self.action[move_forward] = 1
+        else:
+            gain = 0.03 
+            max_turn = 8
+            distance = self.target["distance"]
+            bbox_w = self.target["boundarybox"][2] - self.target["boundarybox"][0]
+            aim_tolerance = max(bbox_w *0.5, 15)
+            should_shoot = abs(distance) < aim_tolerance
+            turn = distance * gain
+            turn = max(-max_turn, min(max_turn, turn))
+            if turn > 0:
+                self.action[turn_left_right_delta] = turn
+                self.action[move_right] = 1
+                self.action[move_forward] = 1
+                return self.action
+            else:
+                self.action[turn_left_right_delta] = turn
+                self.action[move_left] = 1
+                self.action[move_forward] = 1
+        return self.action
 
     
 

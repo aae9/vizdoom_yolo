@@ -2,8 +2,8 @@ import os
 from VizDoomSetups import state_machine_environment, excercise_environment, state_machine_environment_debug
 
 def main():
-    #state_machine_environment()
-    #excercise_environment()
-    state_machine_environment_debug()
+    state_machine_environment()
+    #excercise_environment(num_episodes = 30)
+    #state_machine_environment_debug()
 if __name__ == "__main__":
     main()

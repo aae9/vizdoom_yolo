@@ -30,29 +30,18 @@ def process_frame(frame):
 
 #State machine with custom weights:
 class StateMachine():
-    def __init__(self, game_width, 
-                 max_lost_target_count=50, 
-                 max_search_medbay_timer=400, 
-                 turning_switch=50, 
-                 health_weight=0.4, 
-                 armor_weight=0.3, 
-                 enemy_weight=0.2, 
-                 weapon_weight=0.1,
-                 max_turn=8,
-                 gain=0.03,
-                 aim_tolerance=15):
+    def __init__(self, game_width, max_search_medbay_timer, max_lost_target_count, turning_switch, health_weight, armor_weight, enemy_weight, weapon_weight, max_turn, gain, aim_tolerance, turning_degrees = 8):
         #Generic
+        self.num_states = 4
         self.state = 3
         self.game_width = game_width
         self.action = [0] * 20
         #Targeting
         self.target = None
         self.lost_target_count = 0
-        self.max_lost_target_count = max_lost_target_count
         self.last_turning_direction = 0
         self.last_known_position = None
         self.look_step = 0
-        self.turning_switch = turning_switch
         self.move = False
         #Weapon management
         self.weapon_ammo_memory = [0] * 7 # Memory for ammo count of each weapon to detect when ammo is depleted
@@ -61,16 +50,20 @@ class StateMachine():
         self.health_memory = 100
         #State management
         self.search_medbay_timer = 0
+        self.turn_90_degrees = 0
+        self.found_medbay = False
         self.max_search_medbay_timer = max_search_medbay_timer
+        self.max_lost_target_count = max_lost_target_count
         #Weights
         self.health_weight = health_weight
         self.armor_weight = armor_weight
         self.enemy_weight = enemy_weight
         self.weapon_weight = weapon_weight
-        #Kill state parameters
         self.max_turn = max_turn
         self.gain = gain
         self.aim_tolerance = aim_tolerance
+        self.turning_switch = turning_switch
+        self.turning_degrees = turning_degrees
 
     # Main calculations
     def main(self, results, values, frame_count):
@@ -92,15 +85,12 @@ class StateMachine():
         
         #Changes the states based on self.state
         #Looking around and following a lost target 
-        if self.search_medbay_timer > self.max_search_medbay_timer:
-            self.state = 4 # If we have been searching for a medbay for too long, switch to kill state to try to get frags instead
-        else:
-            if self.state == 0 or self.state == 2:
-                self.search_medbay_timer += 1
-        if self.state == 3 or self.target == None:
+
+
+        if (self.state == 3 or self.target == None) and self.state != 5:
             self.lost_target_count += 1
-            self._go_look_around(should_turn = self.lost_target_count > self.max_lost_target_count)
-            if self.lost_target_count > self.max_lost_target_count:
+            self._go_look_around(should_turn = self.lost_target_count > 30)
+            if self.lost_target_count > 100:
                 self.last_known_position = None
             
             
@@ -109,6 +99,9 @@ class StateMachine():
             
         elif self.state == 4:
             self._go_kill()
+
+        elif self.state == 5:
+            self._find_medbay()
 
         else:
             print("Invalid state index")
@@ -119,20 +112,26 @@ class StateMachine():
         if self.health_memory > values[0] : # If health increased, we probably picked up a medkit, so we reset the health memory to give more weight to picking up medkits again if needed
             self.action[attack] = 1
             self.health_memory = values[0]
+        
        
         return self.action
     
     def update_weights(self, health, armor, enemy_count, medkit_count):
         #armor has a range from 0 to 200    
         if armor is not None:
-            armor_weight = max(0.1, (200 - armor) / 200 * 0.3)     # More weight if armor is low
+            armor_weight = max(0.1, (200 - armor) / 200 * self.armor_weight)     # More weight if armor is low
         else:
             armor_weight = 0
 
-        enemy_weight = max(0, enemy_count*4/10* self.enemy_weight)         # More weight if there are more enemies, with a cap at 10 enemies
+        enemy_weight = max(0, enemy_count*4/10 * self.enemy_weight)         # More weight if there are more enemies, with a cap at 10 enemies
         health_weight = max(0, (100-health)/100 * self.health_weight)   # More weight if there are more medkits, with a cap at 10 medkits
         num_weapons = (1 for weapon in self.weapon_ammo_memory if weapon > 0)
-        weapon_weight = max(0, (2 - sum(num_weapons)) / 2 * self.weapon_weight) # More weight for weapons early in the episode, to encourage picking up weapons at the start
+        weapon_weight = max(0, (3 - sum(num_weapons)) / 3 * self.weapon_weight) # More weight for weapons early in the episode, to encourage picking up weapons at the start
+        if not self.found_medbay and weapon_weight < 0.1:
+            self.state = 5 # Go find medbay if we haven't found it yet
+            return
+
+
         if np.argmax([health_weight, armor_weight, enemy_weight, weapon_weight]) == 0:
             self.state = 0 # Go for health
         elif np.argmax([health_weight, armor_weight, enemy_weight, weapon_weight]) == 1:
@@ -169,7 +168,8 @@ class StateMachine():
                 if  (cls_id == self.state or (self.state == 1 and cls_id == 12 or cls_id == 3 and self.state == 1) 
                     or (self.state == 0 and cls_id == 11) 
                     or (self.state == 2 and cls_id == 11) 
-                    or (self.state == 4 and cls_id in ENEMY_CLASSES)):
+                    or (self.state == 4 and cls_id in ENEMY_CLASSES)
+                    or (self.state == 5 and cls_id == 0)): # If we are looking for medbay, look for medkits
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     possible_targets.append({
                         "cls_id": cls_id,                   # class
@@ -279,6 +279,36 @@ class StateMachine():
             self.action[move_backward] = 1
             return self.action
 
+    def _find_medbay(self):
+        self.action = [0] * 20
+        self.search_medbay_timer += 1
+        if self.search_medbay_timer > self.max_search_medbay_timer:
+            self.found_medbay = True
+        if self.turn_90_degrees < self.turning_degrees:
+            self.action[turn_left_right_delta] = 8
+            self.turn_90_degrees += 8
+        elif self.target is None:
+            self.action[move_forward] = 1
+        else:
+            gain = self.gain
+            max_turn = self.max_turn
+            distance = self.target["distance"]
+            bbox_w = self.target["boundarybox"][2] - self.target["boundarybox"][0]
+            aim_tolerance = max(bbox_w *0.5, 15)
+            should_shoot = abs(distance) < aim_tolerance
+            turn = distance * gain
+            turn = max(-max_turn, min(max_turn, turn))
+            if turn > 0:
+                self.action[turn_left_right_delta] = turn
+                self.action[move_right] = 1
+                self.action[move_forward] = 1
+                return self.action
+            else:
+                self.action[turn_left_right_delta] = turn
+                self.action[move_left] = 1
+                self.action[move_forward] = 1
+        return self.action
+
     
 def optimize_weights(trial):
     health_weight = trial.suggest_float('health_weight', 0.0, 1.0)
@@ -291,8 +321,9 @@ def optimize_weights(trial):
     max_search_medbay_timer = trial.suggest_int('max_search_medbay_timer', 100, 500)
     max_lost_target_count = trial.suggest_int('max_lost_target_count', 10, 100)
     turning_switch = trial.suggest_int('turning_switch', 10, 100)
+    turning_degrees = trial.suggest_int('turning_degrees', 80, 110)
 
-    machine = StateMachine(game_width=320, max_search_medbay_timer=max_search_medbay_timer, max_lost_target_count=max_lost_target_count, turning_switch=turning_switch, health_weight=health_weight, armor_weight=armor_weight, enemy_weight=enemy_weight, weapon_weight=weapon_weight, max_turn=max_turn, gain=gain, aim_tolerance=aim_tolerance)
+    machine = StateMachine(game_width=320, max_search_medbay_timer=max_search_medbay_timer, max_lost_target_count=max_lost_target_count, turning_switch=turning_switch, health_weight=health_weight, armor_weight=armor_weight, enemy_weight=enemy_weight, weapon_weight=weapon_weight, max_turn=max_turn, gain=gain, aim_tolerance=aim_tolerance, turning_degrees=turning_degrees)
     mean_acceptable_range = 3
     saved_rewards = []
     for i in range(3):
